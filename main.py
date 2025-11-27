@@ -234,6 +234,96 @@ Analyze the following medical report text and provide:
         else:
             st.warning("Unable to extract readable text from report. Upload clearer file.")
 
+        st.markdown("---")
+
+    # ================= HEALTH RISK ANALYZER =================
+    st.subheader("❤️ Health Risk Analyzer (0-100)")
+    st.caption("Doctor-style risk assessment with 10 precise follow-up questions")
+
+    if 'risk_stage' not in st.session_state:
+        st.session_state.risk_stage = 0
+    if 'risk_disease' not in st.session_state:
+        st.session_state.risk_disease = ""
+    if 'risk_questions' not in st.session_state:
+        st.session_state.risk_questions = []
+    if 'risk_answers' not in st.session_state:
+        st.session_state.risk_answers = {}
+    if 'risk_gender' not in st.session_state:
+        st.session_state.risk_gender = None
+
+    # STEP 0 : GENDER
+    if st.session_state.risk_stage == 0 and st.session_state.risk_gender is None:
+        gender = st.radio("Select Biological Sex", ["Male", "Female", "Other"], horizontal=True)
+        if st.button("Confirm Gender"):
+            st.session_state.risk_gender = gender
+
+    # STEP 1 : DISEASE INPUT
+    if st.session_state.risk_stage == 0 and st.session_state.risk_gender is not None:
+        disease = st.text_input("Enter disease name for risk analysis")
+        if st.button("Start Risk Analysis") and disease:
+            st.session_state.risk_disease = disease
+            st.session_state.risk_stage = 1
+            st.session_state.risk_answers = {}
+
+            q_prompt = f"""
+You are a clinical AI doctor.
+For disease: {disease}
+Patient Biological Sex: {st.session_state.risk_gender}
+Generate EXACTLY 10 yes/no diagnostic questions.
+Return only the questions without numbering.
+"""
+            raw_questions = call_gemini(q_prompt)
+
+            cleaned = []
+            for line in (raw_questions or "").splitlines():
+                line = line.strip().lstrip('-•0123456789.) ').strip()
+                if line:
+                    cleaned.append(line)
+                if len(cleaned) == 10:
+                    break
+
+            if len(cleaned) < 10:
+                cleaned += [f"Follow-up question {i+1}" for i in range(10 - len(cleaned))]
+
+            st.session_state.risk_questions = cleaned
+
+    # STEP 2 : QUESTIONS
+    elif st.session_state.risk_stage == 1:
+        total_q = len(st.session_state.risk_questions)
+        st.progress(len(st.session_state.risk_answers) / total_q if total_q else 0)
+
+        for idx, question in enumerate(st.session_state.risk_questions):
+            st.markdown(f"**Q{idx+1}. {question}**")
+            st.session_state.risk_answers[idx] = st.radio(
+                label="",
+                options=["Yes", "No"],
+                horizontal=True,
+                key=f"risk_q_{idx}"
+            )
+
+        if st.button("Calculate Health Risk"):
+            analysis_prompt = f"""
+Patient Sex: {st.session_state.risk_gender}
+Disease: {st.session_state.risk_disease}
+Answers: {st.session_state.risk_answers}
+Calculate risk percentage (0-100) and short clinical conclusion.
+"""
+            st.session_state.risk_result = call_gemini(analysis_prompt)
+            st.session_state.risk_stage = 2
+
+    # STEP 3 : RESULT
+    elif st.session_state.risk_stage == 2:
+        st.subheader("📊 Health Risk Score")
+        st.write(st.session_state.risk_result)
+
+        if st.button("Restart Risk Analysis"):
+            st.session_state.risk_stage = 0
+            st.session_state.risk_disease = ""
+            st.session_state.risk_questions = []
+            st.session_state.risk_answers = {}
+            st.session_state.risk_gender = None
+            st.session_state.risk_result = None
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('---')
