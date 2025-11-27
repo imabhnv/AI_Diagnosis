@@ -1,0 +1,7 @@
+streamlit
+numpy
+tensorflow
+pillow
+google-generativeai
+pytesseract
+PyPDF2
