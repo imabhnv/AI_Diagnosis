@@ -5,3 +5,4 @@ pillow
 google-generativeai
 pytesseract
 PyPDF2
+gdown
